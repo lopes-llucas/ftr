@@ -1,0 +1,126 @@
+# Ambiente n8n do desafio "Bot de Clima no Telegram com N8N".
+# Segue a montagem das aulas: n8n editor + worker em modo fila (queue mode),
+# PostgreSQL, Redis e ngrok com domínio estático, todos na rede n8n-ftr.
+# Os segredos ficam no arquivo .env (veja .env.example), fora do git.
+
+services:
+  n8n-editor:
+    image: n8nio/n8n:1.122.4
+    container_name: n8n-editor-ftr
+    restart: always
+    ports:
+      - 5678:5678
+    volumes:
+      - n8n-data:/home/node/.n8n
+    environment:
+      - GENERIC_TIMEZONE=America/Sao_Paulo
+      - TZ=America/Sao_Paulo
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - N8N_RUNNERS_ENABLED=true
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - N8N_GIT_NODE_DISABLE_BARE_REPOS=true
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_DATABASE=postgres
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_USER=postgres
+      - DB_POSTGRESDB_PASSWORD=postgres
+      - EXECUTIONS_MODE=queue
+      - QUEUE_BULL_REDIS_HOST=redis
+      - OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=true
+      # URL pública (ngrok) usada para registrar o webhook do Telegram (exige HTTPS)
+      - WEBHOOK_URL=https://${NGROK_DOMAIN}/
+      # Variáveis do desafio, lidas no workflow com {{ $env.NOME }}
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - n8n-ftr
+
+  worker:
+    image: n8nio/n8n:1.122.4
+    restart: always
+    command: worker
+    ports:
+      - 5679:5678
+    volumes:
+      - n8n-data:/home/node/.n8n
+    environment:
+      - GENERIC_TIMEZONE=America/Sao_Paulo
+      - TZ=America/Sao_Paulo
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - N8N_RUNNERS_ENABLED=true
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - N8N_GIT_NODE_DISABLE_BARE_REPOS=true
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_DATABASE=postgres
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_USER=postgres
+      - DB_POSTGRESDB_PASSWORD=postgres
+      - EXECUTIONS_MODE=queue
+      - QUEUE_BULL_REDIS_HOST=redis
+      - OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=true
+      - WEBHOOK_URL=https://${NGROK_DOMAIN}/
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - n8n-ftr
+
+  postgres:
+    image: ankane/pgvector
+    restart: always
+    # No curso o mapeamento é 5432:5432. Aqui a porta do host é 5434 porque a 5432
+    # já é usada por um PostgreSQL instalado no Windows. Dentro da rede n8n-ftr o
+    # n8n continua acessando postgres:5432.
+    ports:
+      - 5434:5432
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+    networks:
+      - n8n-ftr
+
+  redis:
+    image: redis:alpine
+    restart: always
+    ports:
+      - 6379:6379
+    volumes:
+      - redis-data:/data
+    networks:
+      - n8n-ftr
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: always
+    ports:
+      - 4040:4040
+    volumes:
+      - ./ngrok.yml:/etc/ngrok.yml
+    command: http --domain=${NGROK_DOMAIN} n8n-editor-ftr:5678
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    depends_on:
+      - n8n-editor
+    networks:
+      - n8n-ftr
+
+volumes:
+  n8n-data:
+  postgres-data:
+  redis-data:
+
+networks:
+  n8n-ftr:
+    driver: bridge

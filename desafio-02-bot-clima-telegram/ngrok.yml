@@ -1,0 +1,3 @@
+# Arquivo montado no container do ngrok (/etc/ngrok.yml), como no curso.
+# O túnel em si é definido no "command" do docker-compose.yml e o
+# authtoken vem da variável NGROK_AUTHTOKEN do arquivo .env.
