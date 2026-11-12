@@ -1,0 +1,8 @@
+# Segredos locais (tokens e chaves) — nunca versionar
+.env
+
+# Dados locais do ambiente Docker, caso alguém troque os volumes por pastas
+n8n-data/
+postgres-data/
+redis-data/
+ngrok-data/
